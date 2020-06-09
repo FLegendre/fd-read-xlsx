@@ -12,7 +12,7 @@ main()
   // Get the active sheet of the “test.xlsx” workbook.
   auto const table{ fd_read_xlsx::read("test.xlsx") };
 
-  // “table” is a std::vector of a std::vector of cells.
+  // “table” is a std::vector of std::vectors of cells.
   for (auto const& row : table) {
     std::cout << '|';
     for (auto const& cell : row)
