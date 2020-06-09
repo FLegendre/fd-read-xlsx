@@ -13,10 +13,8 @@
 #include <vector>
 #include <zip.h>
 
-#ifndef FD_READ_XLSX_SHOW
 #define FD_READ_XLSX_SHOW(arg)                                                 \
   std::cout << #arg << '{' << arg << '}' << std::endl;
-#endif
 
 namespace fd_read_xlsx {
 
