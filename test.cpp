@@ -1,6 +1,5 @@
 #include "fd-read-xlsx.hpp"
 #include <cassert>
-#define SHOW(arg) std::cout << #arg << '{' << arg << '}' << std::endl;
 
 int
 main()

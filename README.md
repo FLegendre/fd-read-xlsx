@@ -3,15 +3,16 @@ A fast and dirty C++ library to get the contents of a xlsx Microsoft workbook.
 
 This is an header only library : put the `fd-read-xlsx.hpp` file in a appropriate place and use it as
 ```C++
-#include <iostream>
 #include <fd-read-xlsx.hpp>
 
 int
 main()
 {
 
+  // Get the active sheet of the “test.xlsx” workbook.
   auto const table{ fd_read_xlsx::read("test.xlsx") };
 
+  // “table” is a std::vector of a std::vector of cells.
   for (auto const& row : table) {
     std::cout << '|';
     for (auto const& cell : row)
