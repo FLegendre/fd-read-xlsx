@@ -128,18 +128,12 @@ get_shared_strings(zip_t* archive_ptr, str_t const& nmspace)
       if (pos1 == str_t::npos)
         throw Exception{ "fd-read-xslx library: unable to found the '>' char "
                          "after the “" +
-                         beg_tag +
-                         "” tag "
-                         "(xl/sharedStrings.xml corrupted?)." };
+                         beg_tag + "” tag (xl/sharedStrings.xml corrupted?)." };
       auto const pos2{ contents.find(end_tag, pos1 + 1) };
       if (pos2 == str_t::npos)
         throw Exception{ "fd-read-xslx library: unable to found the “" +
-                         end_tag +
-                         "” tag "
-                         "after the “" +
-                         beg_tag +
-                         "” "
-                         "tag (xl/sharedStrings.xml corrupted?)." };
+                         end_tag + "” tag after the “" + beg_tag +
+                         "” tag (xl/sharedStrings.xml corrupted?)." };
       auto str = str_t(cbegin(contents) + pos1 + 1, cbegin(contents) + pos2);
       replace_all(str, "&lt;", '<');
 
@@ -299,19 +293,16 @@ read(char const* const xlsx_file_name, char const* const sheet_name = "")
         throw Exception{ "fd-read-xslx library: invalid index for the a "
                          "shared string (workbook corrupted?)." };
     } else {
-      // Integer.
       if (value.find('.') == str_t::npos) {
-        // Use “stoll” because the size of a “long long int” is at least 64
-        // bytes.
+        // Integer: use “stoll” because the size of a “long long int” is at
+        // least 64 bytes.
         auto const tmp = std::stoll(value);
         if ((std::numeric_limits<int64_t>::min() <= tmp) &&
             (tmp <= std::numeric_limits<int64_t>::max()))
           v = int64_t(tmp);
         else
           v = double(tmp);
-      }
-      // Double.
-      else
+      } else
         v = std::stod(value);
     }
     size_t i{}, j{};
@@ -394,11 +385,12 @@ read(char const* const xlsx_file_name, char const* const sheet_name = "")
 
   for (int c = next_char(); c != -1; c = next_char()) {
     switch (state) {
-      // Waiting for "<c ".
+      // Waiting for “<”.
       case State::start:
         if (c == '<')
           state = State::lt;
         break;
+        // Waiting for “xml_namespace:c”.
       case State::lt:
         if (nmspace != "") {
           for (auto const& cc : nmspace) {
@@ -422,7 +414,8 @@ read(char const* const xlsx_file_name, char const* const sheet_name = "")
         else
           state = State::start;
         break;
-      // This state is also the return state after the end of a attribute.
+      // Waiting for a attibute within the “c” tag. This state is also the
+      // return state after the end of a attribute.
       case State::c:
         if (c == ' ')
           state = State::space;
@@ -432,7 +425,7 @@ read(char const* const xlsx_file_name, char const* const sheet_name = "")
           ref.clear(), type.clear(),
             state = State::start; // <c r="xx" t="xx"/> : no value
         break;
-      // Waiting for 'r', 't', unknow or '>'.
+      // Waiting for attributes “r”, “t” or unknow or for char “>”.
       case State::space:
         if (c == 'r')
           state = State::r;
@@ -446,13 +439,14 @@ read(char const* const xlsx_file_name, char const* const sheet_name = "")
         else if (c != ' ')
           state = State::u;
         break;
-      // Waiting for ="xxx" or ='xxx'.
+      // Waiting for “=” after the “r” attribute.
       case State::r:
         if (c == '=')
           state = State::re;
         else
           state = State::start;
         break;
+      // Waiting for a single ou a double quote.
       case State::re:
         if (c == '"')
           state = State::red;
@@ -461,25 +455,28 @@ read(char const* const xlsx_file_name, char const* const sheet_name = "")
         else
           state = State::start;
         break;
+      // Waiting for the value of the “r” attribute after a double quote.
       case State::red:
         if (c == '"')
           state = State::c;
         else
           ref += c;
         break;
+      // Waiting for the value of the “r” attribute after a single quote.
       case State::res:
         if (c == '\'')
           state = State::c;
         else
           ref += c;
         break;
-      // Waiting for ="xxx" or ='xxx'.
+      // Waiting for “=” after the “t” attribute.
       case State::t:
         if (c == '=')
           state = State::te;
         else
           state = State::start;
         break;
+      // Waiting for a single ou a double quote.
       case State::te:
         if (c == '"')
           state = State::ted;
@@ -488,23 +485,26 @@ read(char const* const xlsx_file_name, char const* const sheet_name = "")
         else
           state = State::start;
         break;
+      // Waiting for the value of the “t” attribute after a double quote.
       case State::ted:
         if (c == '"')
           state = State::c;
         else
           type += c;
         break;
+      // Waiting for the value of the “t” attribute after a single quote.
       case State::tes:
         if (c == '\'')
           state = State::c;
         else
           type += c;
         break;
-      // Waiting for ="xxx" or ='xxx'.
+      // Waiting for “=” after a unknow attribute.
       case State::u:
         if (c == '=')
           state = State::ue;
         break;
+      // Waiting for a single ou a double quote.
       case State::ue:
         if (c == '"')
           state = State::ued;
@@ -513,19 +513,24 @@ read(char const* const xlsx_file_name, char const* const sheet_name = "")
         else
           state = State::start;
         break;
+      // Waiting for the value of an unknow attribute after a double quote (to
+      // discard it).
       case State::ued:
         if (c == '"')
           state = State::c;
         break;
+      // Waiting for the value of an unknow attribute after a single quote (to
+      // discard it).
       case State::ues:
         if (c == '\'')
           state = State::c;
         break;
-      // Waiting for <v> or for <t>
+      // Waiting for “<” within the “c” tag.
       case State::next:
         if (c == '<')
           state = State::nlt;
         break;
+        // Waiting for “xml_namespace:v” or “xml_namespace:t”.
       case State::nlt:
         if (nmspace != "") {
           for (auto const& cc : nmspace) {
@@ -551,36 +556,41 @@ read(char const* const xlsx_file_name, char const* const sheet_name = "")
         else
           state = State::next; // stay in next state to skip <is> tag
         break;
+        // Waiting for “>” after the “v” tag.
       case State::nv:
         if (c == '>')
           state = State::nvgt;
         else
           state = State::next; // stay in next state to skip <is> tag
         break;
-      // Yes, a cell is gotten !
+      // Waiting for the value of the “v” tag.
       case State::nvgt:
         if (c == '<') {
+          // YES.
           push_value(ref, type, value);
           ref.clear(), type.clear(), value.clear();
           state = State::start;
         } else
           value += c;
         break;
+        // Waiting for “>” after the “t” tag.
       case State::nt:
         if (c == '>')
           state = State::ntgt;
         else
           state = State::next; // stay in next state to skip <is> tag
         break;
-      // Yes, a cell is gotten !
+      // Waiting for the value of the “t” tag.
       case State::ntgt:
         if (c == '<') {
+          // YES.
           push_value(ref, type, value);
           ref.clear(), type.clear(), value.clear();
           state = State::start;
         } else
           value += c;
         break;
+      // Oups...
       default:
         throw Exception{
           "fd-read-xslx library: internal error (should never occur...)."
