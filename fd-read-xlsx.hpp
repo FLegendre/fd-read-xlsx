@@ -36,6 +36,9 @@ private:
 // int64_t is choosen for int: the size is like the size of a double.
 typedef std::variant<str_t, int64_t, double> cell_t;
 
+// Type of the table returned by the read function.
+typedef std::vector<std::vector<cell_t>> table_t;
+
 // This function returns the value of the attribute “attr” of the tag “tag” in
 // the “str” string from “pos”. This function returns [value, pos, end, error].
 // “end” is true if the tag is not found. “error” is true if the tag is found
@@ -105,7 +108,8 @@ replace_all(str_t& str, str_t that, char c)
   }
 }
 // Get the shared strings in the xml file from a Microsoft xlsx workbook.
-// We only get the text between <t ...> and </t> tags to populate the vector.
+// We only concatenate the text between <t ...> and </t> tags within <si>
+// and </si> tags to populate the vector.
 std::vector<str_t>
 get_shared_strings(zip_t* archive_ptr, str_t const& nmspace)
 {
@@ -115,30 +119,51 @@ get_shared_strings(zip_t* archive_ptr, str_t const& nmspace)
   try {
     // We presume that the file is not so big ; so we can get it in memory.
     auto const contents{ get_contents(archive_ptr, "xl/sharedStrings.xml") };
-    auto const beg_tag{ '<' + ((nmspace == "") ? nmspace : (nmspace + ':')) +
-                        't' };
-    auto const end_tag{ "</" + ((nmspace == "") ? nmspace : (nmspace + ':')) +
-                        "t>" };
+
+    auto const beg_si_tag{ '<' + ((nmspace == "") ? nmspace : (nmspace + ':')) +
+                           "si>" };
+    auto const end_si_tag{
+      "</" + ((nmspace == "") ? nmspace : (nmspace + ':')) + "si>"
+    };
+    auto const beg_t_tag{ '<' + ((nmspace == "") ? nmspace : (nmspace + ':')) +
+                          't' };
+    auto const end_t_tag{ "</" + ((nmspace == "") ? nmspace : (nmspace + ':')) +
+                          "t>" };
     str_t::size_type pos{ 0 };
     while (true) {
-      auto const pos0{ contents.find(beg_tag, pos) };
-      if (pos0 == str_t::npos)
+      auto const pos_si_0{ contents.find(beg_si_tag, pos) };
+      if (pos_si_0 == str_t::npos)
         break;
-      auto const pos1{ contents.find('>', pos0 + beg_tag.size()) };
-      if (pos1 == str_t::npos)
-        throw Exception{ "fd-read-xslx library: unable to found the '>' char "
-                         "after the “" +
-                         beg_tag + "” tag (xl/sharedStrings.xml corrupted?)." };
-      auto const pos2{ contents.find(end_tag, pos1 + 1) };
-      if (pos2 == str_t::npos)
+      auto const pos_si_1{ contents.find(end_si_tag,
+                                         pos_si_0 + beg_si_tag.size()) };
+      if (pos_si_1 == str_t::npos)
         throw Exception{ "fd-read-xslx library: unable to found the “" +
-                         end_tag + "” tag after the “" + beg_tag +
+                         end_si_tag + "” string after the “" + beg_si_tag +
                          "” tag (xl/sharedStrings.xml corrupted?)." };
-      auto str = str_t(cbegin(contents) + pos1 + 1, cbegin(contents) + pos2);
+      str_t str;
+      str_t::size_type pos_t{ pos_si_0 + beg_si_tag.size() };
+      while (true) {
+        auto const pos_t_0{ contents.find(beg_t_tag, pos_t) };
+        if (pos_t_0 > pos_si_1)
+          break;
+        auto const pos_t_1{ contents.find('>', pos_t_0 + beg_t_tag.size()) };
+        if (pos_t_1 == str_t::npos)
+          throw Exception{ "fd-read-xslx library: unable to found the '>' char "
+                           "after the “" +
+                           beg_t_tag +
+                           "” tag (xl/sharedStrings.xml corrupted?)." };
+        auto const pos_t_2{ contents.find(end_t_tag, pos_t_1 + 1) };
+        if (pos_t_2 == str_t::npos)
+          throw Exception{ "fd-read-xslx library: unable to found the “" +
+                           end_t_tag + "” tag after the “" + beg_t_tag +
+                           "” tag (xl/sharedStrings.xml corrupted?)." };
+        str +=
+          str_t(cbegin(contents) + pos_t_1 + 1, cbegin(contents) + pos_t_2);
+        pos_t = pos_t_2 + end_t_tag.size();
+      }
       replace_all(str, "&lt;", '<');
-
       rvo.emplace_back(str);
-      pos = pos2 + end_tag.size();
+      pos = pos_si_1 + end_si_tag.size();
     }
 
   } catch (Exception& e) {
@@ -217,12 +242,25 @@ get_namespace_sheet_names_active(zip_t* archive_ptr)
                          (active_index < sheet_names.size()) ? active_index
                                                              : 0);
 }
+// For debug.
+std::vector<str_t>
+get_shared_strings(char const* const xlsx_file_name)
+{
+  int zip_error;
+  auto const archive_ptr{ zip_open(xlsx_file_name, ZIP_RDONLY, &zip_error) };
+  if (!archive_ptr)
+    throw Exception{ "fd-read-xslx library: unable to open the “" +
+                     str_t(xlsx_file_name) + "” workbook." };
+
+  auto const [nmspace, sheet_names, active]{ get_namespace_sheet_names_active(
+    archive_ptr) };
+  return get_shared_strings(archive_ptr, nmspace);
+}
 
 // Read a sheet and returns a table (vectors of vectors) of variants.
 std::vector<std::vector<cell_t>>
 read(char const* const xlsx_file_name, char const* const sheet_name = "")
 {
-
   int zip_error;
   auto const archive_ptr{ zip_open(xlsx_file_name, ZIP_RDONLY, &zip_error) };
   if (!archive_ptr)
@@ -613,15 +651,30 @@ holds_string(cell_t const& v)
 {
   return std::holds_alternative<str_t>(v);
 }
+str_t
+get_string(cell_t const& v)
+{
+  return std::get<str_t>(v);
+}
 bool
 holds_int(cell_t const& v)
 {
   return std::holds_alternative<int64_t>(v);
 }
+int64_t
+get_int(cell_t const& v)
+{
+  return std::get<int64_t>(v);
+}
 bool
 holds_double(cell_t const& v)
 {
   return std::holds_alternative<double>(v);
+}
+double
+get_double(cell_t const& v)
+{
+  return std::get<double>(v);
 }
 str_t
 to_string(cell_t const& v)
