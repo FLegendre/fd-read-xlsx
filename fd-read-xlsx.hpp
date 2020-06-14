@@ -676,6 +676,16 @@ get_double(cell_t const& v)
 {
   return std::get<double>(v);
 }
+bool
+holds_num(cell_t const& v)
+{
+  return holds_int(v) || holds_double(v);
+}
+double
+get_num(cell_t const& v)
+{
+  return holds_int(v) ? get_int(v) : get_double(v);
+}
 str_t
 to_string(cell_t const& v)
 {

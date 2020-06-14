@@ -20,6 +20,11 @@ main()
   assert(fd_read_xlsx::holds_string(table[0][0]));
   assert(fd_read_xlsx::holds_int(table[1][0]));
   assert(fd_read_xlsx::holds_double(table[2][0]));
+  // The namespace defines “holds_num” for int or double.
+  assert(fd_read_xlsx::holds_num(table[1][0]) &&
+         fd_read_xlsx::holds_num(table[2][0]));
+  // The namespace defines “get_num" which returns a double.
+  assert(fd_read_xlsx::get_num(table[1][0]) == 1.);
 
   return 0;
 }
