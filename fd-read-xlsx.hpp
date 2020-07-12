@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <cstring>
 #include <iostream>
+#include <map>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -13,8 +14,7 @@
 #include <vector>
 #include <zip.h>
 
-#define FD_READ_XLSX_SHOW(arg)                                                 \
-  std::cout << #arg << '{' << arg << '}' << std::endl;
+#define FD_READ_XLSX_SHOW(arg) std::cout << #arg << '{' << arg << '}' << std::endl;
 
 namespace fd_read_xlsx {
 
@@ -32,18 +32,17 @@ private:
   str_t const msg_;
 };
 
-// Representation of a cell: std::variant of string, int64_t and double. A
-// int64_t is choosen for int: the size is like the size of a double.
+// Representation of a cell: std::variant of string, int64_t and double. A int64_t is choosen for
+// int: the size is like the size of a double.
 typedef std::variant<str_t, int64_t, double> cell_t;
 
 // Type of the table returned by the read function.
 typedef std::vector<std::vector<cell_t>> table_t;
 
-// This function returns the value of the attribute “attr” of the tag “tag” in
-// the “str” string from “pos”. This function returns [value, pos, end, error].
-// “end” is true if the tag is not found. “error” is true if the tag is found
-// but if the closed quote is not found. “pos” is the new position; “pos” can be
-// equal to str.size() but this value can be reused in the next call to this
+// This function returns the value of the attribute “attr” of the tag “tag” in the “str” string from
+// “pos”. This function returns [value, pos, end, error].  “end” is true if the tag is not found.
+// “error” is true if the tag is found but if the closed quote is not found. “pos” is the new
+// position; “pos” can be equal to str.size() but this value can be reused in the next call to this
 // function.
 std::tuple<str_t, str_t::size_type, bool, bool>
 get_attribute(str_t const& str,
@@ -52,8 +51,7 @@ get_attribute(str_t const& str,
               char const* const tag,
               char const* const attr)
 {
-  auto const beg_tag{ str.find(
-    '<' + ((nmspace == "") ? nmspace : nmspace + ':') + tag, pos) };
+  auto const beg_tag{ str.find('<' + ((nmspace == "") ? nmspace : nmspace + ':') + tag, pos) };
   if (beg_tag == str_t::npos)
     return std::make_tuple("", 0, true, false);
   auto const end_tag{ str.find("/>", beg_tag) };
@@ -65,15 +63,13 @@ get_attribute(str_t const& str,
     auto const pos2{ str.find('"', pos1 + strlen(attr) + 3) };
     if (pos2 == str_t::npos)
       return std::make_tuple("", 0, false, true);
-    auto const value{ str_t(cbegin(str) + pos1 + strlen(attr) + 3,
-                            cbegin(str) + pos2) };
+    auto const value{ str_t(cbegin(str) + pos1 + strlen(attr) + 3, cbegin(str) + pos2) };
     return std::make_tuple(value, end_tag + 2, false, false);
   } else if (quote_or_dbl_quote == '\'') {
     auto const pos2{ str.find('\'', pos1 + strlen(attr) + 3) };
     if (pos2 == str_t::npos)
       return std::make_tuple("", 0, false, true);
-    auto const value{ str_t(cbegin(str) + pos1 + strlen(attr) + 3,
-                            cbegin(str) + pos2) };
+    auto const value{ str_t(cbegin(str) + pos1 + strlen(attr) + 3, cbegin(str) + pos2) };
     return std::make_tuple(value, end_tag + 2, false, false);
   } else
     throw Exception{ "fd-read-xslx library: the attribute “" + str_t(attr) +
@@ -86,8 +82,7 @@ get_contents(zip_t* archive_ptr, char const* const file_name)
 {
   auto const file_ptr{ zip_fopen(archive_ptr, file_name, 0) };
   if (!file_ptr)
-    throw Exception{ "fd-read-xslx library: unable to open “" +
-                     str_t(file_name) + "” file." };
+    throw Exception{ "fd-read-xslx library: unable to open “" + str_t(file_name) + "” file." };
   str_t rvo;
   while (true) {
     char buffer[1024];
@@ -98,6 +93,11 @@ get_contents(zip_t* archive_ptr, char const* const file_name)
   }
   return rvo;
 }
+str_t
+get_contents(zip_t* archive_ptr, str_t const& file_name)
+{
+  return get_contents(archive_ptr, file_name.c_str());
+}
 void
 replace_all(str_t& str, str_t that, char c)
 {
@@ -107,140 +107,124 @@ replace_all(str_t& str, str_t that, char c)
     pos = str.find(that, pos + 1);
   }
 }
-// Get the shared strings in the xml file from a Microsoft xlsx workbook.
-// We only concatenate the text between <t ...> and </t> tags within <si>
-// and </si> tags to populate the vector.
+// Get the shared strings in the xml file from a Microsoft xlsx workbook.  We only concatenate the
+// text between <t ...> and </t> tags within <si> and </si> tags to populate the vector.
 std::vector<str_t>
-get_shared_strings(zip_t* archive_ptr, str_t const& nmspace)
+get_shared_strings(zip_t* archive_ptr, str_t const& file_name, str_t const& nmspace)
 {
 
   std::vector<str_t> rvo;
 
-  try {
-    // We presume that the file is not so big ; so we can get it in memory.
-    auto const contents{ get_contents(archive_ptr, "xl/sharedStrings.xml") };
+  // We presume that the file is not so big ; so we can get it in memory.
+  auto const contents{ get_contents(archive_ptr, file_name) };
 
-    auto const beg_si_tag{ '<' + ((nmspace == "") ? nmspace : (nmspace + ':')) +
-                           "si>" };
-    auto const end_si_tag{
-      "</" + ((nmspace == "") ? nmspace : (nmspace + ':')) + "si>"
-    };
-    auto const beg_t_tag{ '<' + ((nmspace == "") ? nmspace : (nmspace + ':')) +
-                          't' };
-    auto const end_t_tag{ "</" + ((nmspace == "") ? nmspace : (nmspace + ':')) +
-                          "t>" };
-    str_t::size_type pos{ 0 };
+  auto const beg_si_tag{ '<' + ((nmspace == "") ? nmspace : (nmspace + ':')) + "si>" };
+  auto const end_si_tag{ "</" + ((nmspace == "") ? nmspace : (nmspace + ':')) + "si>" };
+  auto const beg_t_tag{ '<' + ((nmspace == "") ? nmspace : (nmspace + ':')) + 't' };
+  auto const end_t_tag{ "</" + ((nmspace == "") ? nmspace : (nmspace + ':')) + "t>" };
+  str_t::size_type pos{ 0 };
+  while (true) {
+    auto const pos_si_0{ contents.find(beg_si_tag, pos) };
+    if (pos_si_0 == str_t::npos)
+      break;
+    auto const pos_si_1{ contents.find(end_si_tag, pos_si_0 + beg_si_tag.size()) };
+    if (pos_si_1 == str_t::npos)
+      throw Exception{ "fd-read-xslx library: unable to found the “" + end_si_tag +
+                       "” string after the “" + beg_si_tag + "” tag (" + file_name +
+                       " corrupted?)." };
+    str_t str;
+    str_t::size_type pos_t{ pos_si_0 + beg_si_tag.size() };
     while (true) {
-      auto const pos_si_0{ contents.find(beg_si_tag, pos) };
-      if (pos_si_0 == str_t::npos)
+      auto const pos_t_0{ contents.find(beg_t_tag, pos_t) };
+      if (pos_t_0 > pos_si_1)
         break;
-      auto const pos_si_1{ contents.find(end_si_tag,
-                                         pos_si_0 + beg_si_tag.size()) };
-      if (pos_si_1 == str_t::npos)
-        throw Exception{ "fd-read-xslx library: unable to found the “" +
-                         end_si_tag + "” string after the “" + beg_si_tag +
-                         "” tag (xl/sharedStrings.xml corrupted?)." };
-      str_t str;
-      str_t::size_type pos_t{ pos_si_0 + beg_si_tag.size() };
-      while (true) {
-        auto const pos_t_0{ contents.find(beg_t_tag, pos_t) };
-        if (pos_t_0 > pos_si_1)
-          break;
-        auto const pos_t_1{ contents.find('>', pos_t_0 + beg_t_tag.size()) };
-        if (pos_t_1 == str_t::npos)
-          throw Exception{ "fd-read-xslx library: unable to found the '>' char "
-                           "after the “" +
-                           beg_t_tag +
-                           "” tag (xl/sharedStrings.xml corrupted?)." };
-        auto const pos_t_2{ contents.find(end_t_tag, pos_t_1 + 1) };
-        if (pos_t_2 == str_t::npos)
-          throw Exception{ "fd-read-xslx library: unable to found the “" +
-                           end_t_tag + "” tag after the “" + beg_t_tag +
-                           "” tag (xl/sharedStrings.xml corrupted?)." };
-        str +=
-          str_t(cbegin(contents) + pos_t_1 + 1, cbegin(contents) + pos_t_2);
-        pos_t = pos_t_2 + end_t_tag.size();
-      }
-      replace_all(str, "&lt;", '<');
-      rvo.emplace_back(str);
-      pos = pos_si_1 + end_si_tag.size();
+      auto const pos_t_1{ contents.find('>', pos_t_0 + beg_t_tag.size()) };
+      if (pos_t_1 == str_t::npos)
+        throw Exception{ "fd-read-xslx library: unable to found the '>' char "
+                         "after the “" +
+                         beg_t_tag + "” tag (" + file_name + " corrupted?)." };
+      auto const pos_t_2{ contents.find(end_t_tag, pos_t_1 + 1) };
+      if (pos_t_2 == str_t::npos)
+        throw Exception{ "fd-read-xslx library: unable to found the “" + end_t_tag +
+                         "” tag after the “" + beg_t_tag + "” tag (" + file_name +
+                         " corrupted?)." };
+      str += str_t(cbegin(contents) + pos_t_1 + 1, cbegin(contents) + pos_t_2);
+      pos_t = pos_t_2 + end_t_tag.size();
     }
-
-  } catch (Exception& e) {
-    // The sharedStrings.xml file does not always exist.
+    replace_all(str, "&lt;", '<');
+    rvo.emplace_back(str);
+    pos = pos_si_1 + end_si_tag.size();
   }
+
   return rvo;
 }
 
-// This function returns the tuple of the xml namespace, the
-// vector of (sheet names, sheet id) and active sheet index.
-std::tuple<str_t, std::vector<std::pair<str_t, str_t>>, size_t>
-get_namespace_sheet_names_active(zip_t* archive_ptr)
+// This function returns the tuple of the xml namespace, the map of (sheet ids, sheet names) and
+// active sheet name.
+std::tuple<str_t, std::map<str_t, str_t>, str_t>
+get_ns_ids_and_active(zip_t* archive_ptr, str_t const& wb_base, str_t const& wb_name)
 {
   // We presume that the file is not so big ; so we can get it in memory.
-  auto const contents{ get_contents(archive_ptr, "xl/workbook.xml") };
+  auto const contents{ get_contents(archive_ptr, wb_base + '/' + wb_name) };
 
-  // Guess the namespace: if we find a tag with <NAMESPACE:workbook ...
-  // xmlns:NAMESPACE=... then NAMESPACE is the namespace.
+  // Guess the namespace: if we find a tag with <NAMESPACE:workbook ... xmlns:NAMESPACE=... then
+  // NAMESPACE is the namespace.
   auto const nmspace = [&]() -> str_t {
     auto const pos = contents.find("workbook ");
     if (pos == str_t::npos)
-      throw Exception{ "fd-read-xslx library: unable to found the “workbook” "
-                       "tag (xl/workbook.xml corrupted?)." };
+      throw Exception{ "fd-read-xslx library: unable to found the “workbook” tag (" + wb_base +
+                       '/' + wb_name + " corrupted?)." };
     if (pos == 0)
-      throw Exception{ "fd-read-xslx library: the string “workbook” is found "
-                       "at position 0 (xl/workbook.xml corrupted?)." };
+      throw Exception{ "fd-read-xslx library: the string “workbook” is found at position 0 "
+                       "(" +
+                       wb_base + '/' + wb_name + " corrupted?)." };
     if (contents[pos - 1] == '<')
       return "";
     if (contents[pos - 1] != ':')
-      throw Exception{
-        "fd-read-xslx library: the string “workbook” is not preceded by either "
-        "“<” or “:” (xl/workbook.xml corrupted?)."
-      };
+      throw Exception{ "fd-read-xslx library: the string “workbook” is not preceded by either “<” "
+                       "or “:” (" +
+                       wb_base + '/' + wb_name + " corrupted?)." };
     auto const pos0 = contents.rfind('<', pos - 2);
     if (pos0 == str_t::npos)
-      throw Exception{ "fd-read-xslx library: unable to found the “<” for the "
-                       "“workbook” tag (xl/workbook.xml corrupted?)." };
-    return str_t{ begin(contents) + pos0 + 1, begin(contents) + pos - 1 };
+      throw Exception{ "fd-read-xslx library: unable to found the “<” for the “workbook” tag "
+                       "(" +
+                       wb_base + '/' + wb_name + " corrupted?)." };
+    return str_t{ cbegin(contents) + pos0 + 1, cbegin(contents) + pos - 1 };
   }();
 
-  auto const active_index = [&]() -> size_t {
+  auto const active_tab = [&]() -> int {
     auto const [str, pos, end, err] =
-      get_attribute(contents, 0, nmspace, "workbookView", "activeTab");
+      get_attribute(contents, 0, nmspace, "workbookView ", "activeTab");
     if (err)
-      throw Exception{ "fd-read-xslx library: unable to found the closing “\"” "
-                       "or “'”  char after the "
-                       "“activeTab” attribute (xl/workbook.xml corrupted?)." };
-    // If the workbook has only one worksheet, the active worksheet is not
-    // indicated.
+      throw Exception{ "fd-read-xslx library: unable to found the closing “\"” or “'”  char after "
+                       "the “activeTab” attribute (" +
+                       wb_base + '/' + wb_name + " corrupted?)." };
+    // If the workbook has only one worksheet, the active worksheet is not indicated.
     return end ? 0 : std::stoi(str);
   }();
 
-  std::vector<std::pair<str_t, str_t>> sheet_names;
-  str_t::size_type pos{ 0 };
+  std::map<str_t, str_t> ids;
+  str_t::size_type pos{};
+  str_t active_name;
+  // <sheet name="sheet_name" sheetId="1" r:id="rId1"/>
   while (true) {
-    auto const [name, pos1, end1, err1]{ get_attribute(
+    auto const [name, pos_name, end_name, err_name]{ get_attribute(
       contents, pos, nmspace, "sheet ", "name") };
-    if (err1)
-      throw Exception{ "fd-read-xslx library: unable to found the closing “\"” "
-                       "or “'” char after the "
-                       "“name” attribute (xl/workbook.xml corrupted?)." };
-    if (end1)
-      break;
-    auto const [id, pos2, end2, err2]{ get_attribute(
+    auto const [id, pos_id, end_id, err_id]{ get_attribute(
       contents, pos, nmspace, "sheet ", "sheetId") };
-    if (err2 || end2)
-      throw Exception{ "fd-read-xslx library: unable to found the closing “\"” "
-                       "or “'” char after the "
-                       "“sheetId” attribute (xl/workbook.xml corrupted?)." };
-    sheet_names.emplace_back(name, id);
-    pos = pos2;
+    auto const [rid, pos_rid, end_rid, err_rid]{ get_attribute(
+      contents, pos, nmspace, "sheet ", "r:id") };
+    if (end_name || err_name || end_id || err_id || end_rid || err_rid) {
+      if (ids.empty())
+        throw Exception{ "fd-read-xslx library: unable to found the  sheet names (" + wb_base +
+                         '/' + wb_name + " corrupted?)." };
+      return { nmspace, ids, active_name };
+    }
+    if (std::stoi(id) == (active_tab + 1))
+      active_name = name;
+    ids[name] = rid;
+    pos = pos_rid;
   }
-  // Be sure that the active index is valid.
-  return std::make_tuple(nmspace,
-                         sheet_names,
-                         (active_index < sheet_names.size()) ? active_index
-                                                             : 0);
 }
 // For debug.
 std::vector<str_t>
@@ -249,12 +233,99 @@ get_shared_strings(char const* const xlsx_file_name)
   int zip_error;
   auto const archive_ptr{ zip_open(xlsx_file_name, ZIP_RDONLY, &zip_error) };
   if (!archive_ptr)
-    throw Exception{ "fd-read-xslx library: unable to open the “" +
-                     str_t(xlsx_file_name) + "” workbook." };
+    throw Exception{ "fd-read-xslx library: unable to open the “" + str_t(xlsx_file_name) +
+                     "” workbook." };
 
-  auto const [nmspace, sheet_names, active]{ get_namespace_sheet_names_active(
-    archive_ptr) };
-  return get_shared_strings(archive_ptr, nmspace);
+  return get_shared_strings(archive_ptr, "xl/sharedStrings.xml", "");
+}
+
+std::pair<str_t, str_t>
+get_wb_base_and_name(zip_t* archive_ptr)
+{
+  // We presume that the file is not so big ; so we can get it in memory.
+  auto const contents{ get_contents(archive_ptr, "_rels/.rels") };
+  // We are looking for <Relationship
+  // Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument"
+  // Target="xl/workbook.xml"/>
+  str_t::size_type pos{};
+  while (true) {
+    auto const [type, pos_type, end_type, err_type] =
+      get_attribute(contents, pos, "", "Relationship ", "Type");
+    auto const [target, pos_target, end_target, err_target] =
+      get_attribute(contents, pos, "", "Relationship ", "Target");
+    if (end_type || err_type || end_target || err_type)
+      throw Exception{
+        "fd-read-xslx library: unable to found the workbook name (file corrupted?)."
+      };
+    if (type.find("relationships/officeDocument") != str_t::npos) {
+      auto const pos{ target.find('/') };
+      if (pos == str_t::npos)
+        throw Exception{
+          "fd-read-xslx library: unable to found the workbook base (file corrupted?)."
+        };
+      return { str_t{ cbegin(target), cbegin(target) + pos },
+               str_t{ cbegin(target) + pos + 1, cend(target) } };
+    }
+    pos = pos_target;
+  }
+}
+std::tuple<str_t, std::map<str_t, str_t>, str_t>
+get_ws_and_shared(zip_t* archive_ptr, str_t const& wb_base, str_t const& wb_name)
+{
+  // We presume that the file is not so big ; so we can get it in memory.
+  auto const contents{ get_contents(archive_ptr, wb_base + "/_rels/" + wb_name + ".rels") };
+  // We are looking for
+  // <Relationship
+  //   Id="rId1"
+  //   Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet"
+  //   Target="worksheets/sheet1.xml"/>
+  // or
+  // <Relationship
+  //   Id="rId2"
+  //   Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings"
+  //   Target="sharedStrings.xml"/>
+
+  str_t base;
+  std::map<str_t, str_t> names;
+  str_t shared;
+  str_t::size_type pos{};
+  while (true) {
+    auto const [id, pos_id, end_id, err_id] =
+      get_attribute(contents, pos, "", "Relationship ", "Id");
+    auto const [type, pos_type, end_type, err_type] =
+      get_attribute(contents, pos, "", "Relationship ", "Type");
+    auto const [target, pos_target, end_target, err_target] =
+      get_attribute(contents, pos, "", "Relationship ", "Target");
+    if (end_id || err_id || end_type || err_type || end_target || err_type) {
+      if (base.empty())
+        throw Exception{
+          "fd-read-xslx library: unable to found the worksheet names (file corrupted?)."
+        };
+      return { base, names, shared };
+    }
+    if (type.find("relationships/worksheet") != str_t::npos) {
+      auto const pos{ target.find('/') };
+      if (pos == str_t::npos)
+        throw Exception{
+          "fd-read-xslx library: unable to found the worksheet base (file corrupted?)."
+        };
+      if (base.empty())
+        base = str_t{ cbegin(target), cbegin(target) + pos };
+      else if (base != str_t{ cbegin(target), cbegin(target) + pos })
+        throw Exception{ "fd-read-xslx library: different worksheet bases (file corrupted?)." };
+      names[id] = str_t{ cbegin(target) + pos + 1, cend(target) };
+    } else if (type.find("relationships/sharedStrings") != str_t::npos) {
+      // Some time, it is only the relative path, some time, it is the absolute...
+      if (target.find('/') != str_t::npos) {
+        if (target[0] == '/')
+          shared = str_t{ cbegin(target) + 1, cend(target) };
+        else
+          shared = target;
+      } else
+        shared = wb_base + '/' + target;
+    }
+    pos = pos_target;
+  }
 }
 
 // Read a sheet and returns a table (vectors of vectors) of variants.
@@ -264,40 +335,74 @@ read(char const* const xlsx_file_name, char const* const sheet_name = "")
   int zip_error;
   auto const archive_ptr{ zip_open(xlsx_file_name, ZIP_RDONLY, &zip_error) };
   if (!archive_ptr)
-    throw Exception{ "fd-read-xslx library: unable to open the “" +
-                     str_t(xlsx_file_name) + "” workbook." };
+    throw Exception{ "fd-read-xslx library: unable to open the “" + str_t(xlsx_file_name) +
+                     "” workbook." };
 
-  auto const [nmspace, sheet_names, active]{ get_namespace_sheet_names_active(
-    archive_ptr) };
+  // The archive tree is
+  //          _rels
+  //          xl
+  //          [Content_Types].xml
+  // We do not read [Content_Types].xml, assuming that the file is a xlsx file.
+  // We read the “_rels/.rels” file to get the workbook base and name (the base is
+  // usually “xl” and the name “workbook.xml”).
 
-  // If the sheet name is empty, then the active sheet is used.
-  auto const id = [&] {
+  auto const [wb_base, wb_name]{ get_wb_base_and_name(archive_ptr) };
+
+  // The xl directory is
+  //          _rels
+  //          worksheets
+  //          workbook.xml
+  //          sharedStrings.xml
+  // We read the “_rels/workbook.xml.rels” file to get the worksheets base, the Ids and names of the
+  // worksheets (the base is usually “worksheets", the Ids “rId1”, “rId2”, ... and the names
+  // “sheet1.xml”, “sheet2.xml”, ...) and the shared file name. ws_names is a map with rid as key
+  // and effective file name as value.
+  auto const [ws_base, ws_names, shared]{ get_ws_and_shared(archive_ptr, wb_base, wb_name) };
+
+  // We read the “workbook.xml” to get the namespace, the worksheets effective names and the active
+  // sheet. ids is a map with sheet name as key and rid as value.
+  auto const [nmspace, ids, active]{ get_ns_ids_and_active(archive_ptr, wb_base, wb_name) };
+
+  auto const sheet_file_name{ [&]() {
+    // The user asks for the active sheet.
     if (sheet_name[0] == '\0') {
-      if (active >= sheet_names.size())
-        throw Exception{ "fd-read-xslx library: invalid index for the active "
-                         "worksheet (workbook corrupted?)." };
-      return sheet_names[active].second;
+      if (active == "")
+        return wb_base + '/' + ws_base + '/' + cbegin(ws_names)->second;
+      else {
+        auto const it_ids{ ids.find(active) };
+        if (it_ids == cend(ids))
+          throw Exception{
+            "fd-read-xslx library: unable to get the active sheet (file corrupted?)."
+          };
+        auto const it_names{ ws_names.find(it_ids->second) };
+        if (it_names == cend(ws_names))
+          throw Exception{
+            "fd-read-xslx library: unable to get the requested sheet (file corrupted?)."
+          };
+        return wb_base + '/' + ws_base + '/' + it_names->second;
+      }
     }
-    auto const i =
-      std::find_if(cbegin(sheet_names), cend(sheet_names), [&](auto const& p) {
-        return p.first == sheet_name;
-      });
-    if (i == cend(sheet_names))
-      throw Exception{ "fd-read-xslx library: unable to found the “" +
-                       str_t(sheet_name) + "” worksheet." };
-    return sheet_names[i - cbegin(sheet_names)].second;
-  }();
+    // The user asks for a requested sheet.
+    auto const it_ids{ ids.find(sheet_name) };
+    if (it_ids == cend(ids))
+      throw Exception{ "fd-read-xslx library: the requested sheet “" + str_t{ sheet_name } +
+                       "” is not in the workbook." };
+    auto const it_names{ ws_names.find(it_ids->second) };
+    if (it_names == cend(ws_names))
+      throw Exception{
+        "fd-read-xslx library: unable to get the requested sheet (file corrupted?)."
+      };
+    return wb_base + '/' + ws_base + '/' + it_names->second;
+  }() };
 
-  auto const shared_strings{ get_shared_strings(archive_ptr, nmspace) };
+  auto const shared_strings{ shared.empty() ? std::vector<str_t>{}
+                                            : get_shared_strings(archive_ptr, shared, nmspace) };
 
   std::vector<std::vector<cell_t>> rvo;
 
-  auto const file_name = "xl/worksheets/sheet" + id + ".xml";
-
-  auto const file_ptr{ zip_fopen(archive_ptr, file_name.c_str(), 0) };
+  auto const file_ptr{ zip_fopen(archive_ptr, sheet_file_name.c_str(), 0) };
   if (!file_ptr)
-    throw Exception{ "fd-read-xslx library: unable to open the “" + file_name +
-                     "” file." };
+    throw Exception{ "fd-read-xslx library: unable to open the “" + sheet_file_name + "” file." };
 
   char buffer[1024];
   size_t n{};
@@ -328,8 +433,9 @@ read(char const* const xlsx_file_name, char const* const sheet_name = "")
       if ((0 <= i) && (size_t(i) < shared_strings.size()))
         v = shared_strings[i];
       else
-        throw Exception{ "fd-read-xslx library: invalid index for the a "
-                         "shared string (workbook corrupted?)." };
+        throw Exception{
+          "fd-read-xslx library: invalid index for the a shared string (workbook corrupted?)."
+        };
     } else {
       if (value.find('.') == str_t::npos) {
         // Integer: use “stoll” because the size of a “long long int” is at
@@ -351,9 +457,7 @@ read(char const* const xlsx_file_name, char const* const sheet_name = "")
         i = 10 * i + size_t(c - '0');
     }
     if ((i == 0) || (j == 0))
-      throw Exception{
-        "fd-read-xslx library: invalid cell ref (workbook corrupted?)."
-      };
+      throw Exception{ "fd-read-xslx library: invalid cell ref (workbook corrupted?)." };
     --i;
     --j;
     // rvo.size() == 3 and i == 2 : error
@@ -362,9 +466,7 @@ read(char const* const xlsx_file_name, char const* const sheet_name = "")
     // rvo.size() == 0 and i == 2 : push the current row, clear it and add 1
     // empty row
     if (rvo.size() > i)
-      throw Exception{
-        "fd-read-xslx library: rows not sorted (workbook corrupted?)."
-      };
+      throw Exception{ "fd-read-xslx library: rows not sorted (workbook corrupted?)." };
     else if (rvo.size() < i) {
       rvo.emplace_back(row);
       row.clear();
@@ -376,9 +478,7 @@ read(char const* const xlsx_file_name, char const* const sheet_name = "")
     // row.size() == 1 and j == 1 : push the element on the current row
     // row.size() == 0 and j == 1 : add an empty cell and push the element
     if (row.size() > j)
-      throw Exception{
-        "fd-read-xslx library: columns not sorted (workbook corrupted?)."
-      };
+      throw Exception{ "fd-read-xslx library: columns not sorted (workbook corrupted?)." };
     else {
       auto const count = j - row.size();
       for (size_t jj{}; jj < count; ++jj)
@@ -452,8 +552,8 @@ read(char const* const xlsx_file_name, char const* const sheet_name = "")
         else
           state = State::start;
         break;
-      // Waiting for a attibute within the “c” tag. This state is also the
-      // return state after the end of a attribute.
+      // Waiting for a attibute within the “c” tag. This state is also the return state after the
+      // end of a attribute.
       case State::c:
         if (c == ' ')
           state = State::space;
@@ -551,14 +651,12 @@ read(char const* const xlsx_file_name, char const* const sheet_name = "")
         else
           state = State::start;
         break;
-      // Waiting for the value of an unknow attribute after a double quote (to
-      // discard it).
+      // Waiting for the value of an unknow attribute after a double quote (to discard it).
       case State::ued:
         if (c == '"')
           state = State::c;
         break;
-      // Waiting for the value of an unknow attribute after a single quote (to
-      // discard it).
+      // Waiting for the value of an unknow attribute after a single quote (to discard it).
       case State::ues:
         if (c == '\'')
           state = State::c;
@@ -630,15 +728,18 @@ read(char const* const xlsx_file_name, char const* const sheet_name = "")
         break;
       // Oups...
       default:
-        throw Exception{
-          "fd-read-xslx library: internal error (should never occur...)."
-        };
+        throw Exception{ "fd-read-xslx library: internal error (should never occur...)." };
     }
   }
   // Do not forget to append the last row !
   if (!row.empty())
     rvo.emplace_back(row);
   return rvo;
+}
+std::vector<std::vector<cell_t>>
+read(std::string const& xlsx_file_name, char const* const sheet_name = "")
+{
+  return read(xlsx_file_name.c_str(), sheet_name);
 }
 template<typename T>
 bool
