@@ -148,6 +148,9 @@ get_shared_strings(zip_t* archive_ptr, str_t const& file_name, str_t const& nmsp
 			pos_t = pos_t_2 + end_t_tag.size();
 		}
 		replace_all(str, "&lt;", '<');
+		replace_all(str, "&gt;", '>');
+		replace_all(str, "&quot;", '"');
+		replace_all(str, "&apos;", '\'');
 		rvo.emplace_back(str);
 		pos = pos_si_1 + end_si_tag.size();
 	}
@@ -420,6 +423,9 @@ read(char const* const xlsx_file_name, char const* const sheet_name = "")
 		// String inline.
 		if (type == "inlineStr") {
 			replace_all(value, "&lt;", '<');
+			replace_all(value, "&gt;", '>');
+			replace_all(value, "&quot;", '"');
+			replace_all(value, "&apos;", '\'');
 			v = value;
 		}
 		// Shared string.
@@ -729,10 +735,34 @@ read(char const* const xlsx_file_name, char const* const sheet_name = "")
 		rvo.emplace_back(row);
 	return rvo;
 }
+// Read a workbook and returns the worksheet name list.
+std::vector<str_t>
+get_worksheet_names(char const* const xlsx_file_name)
+{
+
+	auto const zip{ Zip{ xlsx_file_name } };
+	auto const [wb_base, wb_name]{ get_wb_base_and_name(zip.archive_ptr_) };
+	auto const [ws_base, ws_names, shared]{ get_ws_and_shared(zip.archive_ptr_, wb_base, wb_name) };
+	auto const [nmspace, ids, active]{ get_ns_ids_and_active(zip.archive_ptr_, wb_base, wb_name) };
+	std::vector<str_t> rvo;
+	rvo.reserve(ids.size());
+	for (auto const& p : ids)
+		rvo.push_back(p.first);
+	return rvo;
+}
 std::vector<std::vector<cell_t>>
 read(str_t const& xlsx_file_name, char const* const sheet_name = "")
 {
 	return read(xlsx_file_name.c_str(), sheet_name);
+}
+std::map<std::string, size_t>
+names(std::vector<cell_t> const& v)
+{
+	std::map<std::string, size_t> rvo;
+	for (auto const& c : v)
+		if (std::holds_alternative<std::string>(c))
+			rvo[std::get<std::string>(c)] = &c - &v[0];
+	return rvo;
 }
 template<typename T>
 bool
