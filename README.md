@@ -13,6 +13,7 @@ main()
   auto const table{ fd_read_xlsx::read("test.xlsx") };
 
   // “table” is a std::vector of std::vectors of cells.
+  // “cells” are a std::variant<std::string, int64_t, double>.
   for (auto const& row : table) {
     std::cout << '|';
     for (auto const& cell : row)

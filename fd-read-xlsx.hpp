@@ -81,7 +81,8 @@ get_contents(zip_t* archive_ptr, char const* const file_name)
 {
 	auto const file_ptr{ zip_fopen(archive_ptr, file_name, 0) };
 	if (!file_ptr)
-		throw Exception{ "unable to open “" + str_t(file_name) + "” file" };
+		throw Exception{ "unable to open the “" + str_t(file_name) +
+			               "” workbook (or the file is not a xlsx workbook)" };
 	str_t rvo;
 	while (true) {
 		char buffer[1024];
@@ -230,7 +231,8 @@ get_shared_strings(char const* const xlsx_file_name)
 	int zip_error;
 	auto const archive_ptr{ zip_open(xlsx_file_name, ZIP_RDONLY, &zip_error) };
 	if (!archive_ptr)
-		throw Exception{ "unable to open the “" + str_t(xlsx_file_name) + "” workbook" };
+		throw Exception{ "unable to open the “" + str_t(xlsx_file_name) +
+			               "” workbook (or the file is not a xlsx workbook)" };
 
 	return get_shared_strings(archive_ptr, "xl/sharedStrings.xml", "");
 }
@@ -324,7 +326,8 @@ struct Zip
 		int zip_error;
 		archive_ptr_ = zip_open(file_name, ZIP_RDONLY, &zip_error);
 		if (!archive_ptr_)
-			throw Exception{ "unable to open the “" + str_t(file_name) + "” file" };
+			throw Exception{ "unable to open the “" + str_t(file_name) +
+				               "” workbook (or the file is not a xlsx workbook)" };
 	}
 	~Zip()
 	{
@@ -336,8 +339,8 @@ struct Zip
 };
 
 // Read a sheet and returns a table (vectors of vectors) of variants.
-std::vector<std::vector<cell_t>>
-read(char const* const xlsx_file_name, char const* const sheet_name = "")
+std::pair<std::vector<std::vector<cell_t>>, str_t>
+get_table_sheetname(char const* const xlsx_file_name, char const* const sheet_name = "")
 {
 
 	auto const zip{ Zip{ xlsx_file_name } };
@@ -367,11 +370,12 @@ read(char const* const xlsx_file_name, char const* const sheet_name = "")
 	// sheet. ids is a map with sheet name as key and rid as value.
 	auto const [nmspace, ids, active]{ get_ns_ids_and_active(zip.archive_ptr_, wb_base, wb_name) };
 
-	auto const sheet_file_name{ [&]() {
+	auto const [sheet_file_name, sheetname]{ [&]() {
 		// The user asks for the active sheet.
 		if (sheet_name[0] == '\0') {
 			if (active == "")
-				return wb_base + '/' + ws_base + '/' + cbegin(ws_names)->second;
+				return std::pair{ wb_base + '/' + ws_base + '/' + cbegin(ws_names)->second,
+					                cbegin(ws_names)->second };
 			else {
 				auto const it_ids{ ids.find(active) };
 				if (it_ids == cend(ids))
@@ -379,7 +383,7 @@ read(char const* const xlsx_file_name, char const* const sheet_name = "")
 				auto const it_names{ ws_names.find(it_ids->second) };
 				if (it_names == cend(ws_names))
 					throw Exception{ "unable to get the requested sheet (file corrupted?)" };
-				return wb_base + '/' + ws_base + '/' + it_names->second;
+				return std::pair{ wb_base + '/' + ws_base + '/' + it_names->second, active };
 			}
 		}
 		// The user asks for a requested sheet.
@@ -389,7 +393,7 @@ read(char const* const xlsx_file_name, char const* const sheet_name = "")
 		auto const it_names{ ws_names.find(it_ids->second) };
 		if (it_names == cend(ws_names))
 			throw Exception{ "unable to get the requested sheet (file corrupted?)" };
-		return wb_base + '/' + ws_base + '/' + it_names->second;
+		return std::pair{ wb_base + '/' + ws_base + '/' + it_names->second, str_t{ sheet_name } };
 	}() };
 
 	auto const shared_strings{ shared.empty()
@@ -733,8 +737,14 @@ read(char const* const xlsx_file_name, char const* const sheet_name = "")
 	// Do not forget to append the last row !
 	if (!row.empty())
 		rvo.emplace_back(row);
-	return rvo;
+	return { rvo, sheetname };
 }
+std::vector<std::vector<cell_t>>
+read(char const* const xlsx_file_name, char const* const sheet_name = "")
+{
+	return get_table_sheetname(xlsx_file_name, sheet_name).first;
+}
+
 // Read a workbook and returns the worksheet name list.
 std::vector<str_t>
 get_worksheet_names(char const* const xlsx_file_name)
@@ -769,6 +779,11 @@ bool
 compare(cell_t const& v, T const& t)
 {
 	return std::holds_alternative<T>(v) && (std::get<T>(v) == t);
+}
+bool
+empty(cell_t const& v)
+{
+	return std::holds_alternative<str_t>(v) && std::get<str_t>(v).empty();
 }
 bool
 holds_string(cell_t const& v)
