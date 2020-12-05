@@ -781,6 +781,11 @@ compare(cell_t const& v, T const& t)
 	return std::holds_alternative<T>(v) && (std::get<T>(v) == t);
 }
 bool
+compare(cell_t const& v, char const* ptr)
+{
+	return std::holds_alternative<str_t>(v) && (std::strcmp(ptr, std::get<str_t>(v).c_str()) == 0);
+}
+bool
 empty(cell_t const& v)
 {
 	return std::holds_alternative<str_t>(v) && std::get<str_t>(v).empty();
