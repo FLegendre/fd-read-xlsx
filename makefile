@@ -12,4 +12,4 @@ test : fd-read-xlsx.hpp test.cpp
 	g++ -std=c++17 -Wall -g test.cpp fd-read-xlsx.a -lzip --output test
 
 format :
-	clang-format -i fd-read-xlsx-header-only.hpp fd-read-xlsx.hpp fd-read-xlsx.cpp test-header-only.cpp
+	clang-format -i fd-read-xlsx-header-only.hpp fd-read-xlsx.hpp fd-read-xlsx.cpp test.cpp test-header-only.cpp
