@@ -777,60 +777,56 @@ names(std::vector<cell_t> const& v)
 	return rvo;
 }
 bool
-compare(cell_t const& v, char const* ptr)
+compare(cell_t const& cell, char const* ptr)
 {
-	return std::holds_alternative<str_t>(v) && (std::strcmp(ptr, std::get<str_t>(v).c_str()) == 0);
+	return std::holds_alternative<str_t>(cell) &&
+	       (std::strcmp(ptr, std::get<str_t>(cell).c_str()) == 0);
 }
 bool
-empty(cell_t const& v)
+empty(cell_t const& cell)
 {
-	return std::holds_alternative<str_t>(v) && std::get<str_t>(v).empty();
+	return std::holds_alternative<str_t>(cell) && std::get<str_t>(cell).empty();
 }
 bool
-holds_string(cell_t const& v)
+holds_string(cell_t const& cell)
 {
-	return std::holds_alternative<str_t>(v);
+	return std::holds_alternative<str_t>(cell);
 }
 str_t
-get_string(cell_t const& v)
+get_string(cell_t const& cell)
 {
-	return std::get<str_t>(v);
+	return std::get<str_t>(cell);
 }
 bool
-holds_int(cell_t const& v)
+holds_int(cell_t const& cell)
 {
-	return std::holds_alternative<int64_t>(v);
+	return std::holds_alternative<int64_t>(cell);
 }
 int64_t
-get_int(cell_t const& v)
+get_int(cell_t const& cell)
 {
-	return std::get<int64_t>(v);
+	return std::get<int64_t>(cell);
 }
 bool
-holds_double(cell_t const& v)
+holds_double(cell_t const& cell)
 {
-	return std::holds_alternative<double>(v);
+	return std::holds_alternative<double>(cell);
 }
 double
-get_double(cell_t const& v)
+get_double(cell_t const& cell)
 {
-	return std::get<double>(v);
-}
-bool
-holds_num(cell_t const& v)
-{
-	return holds_int(v) || holds_double(v);
+	return std::get<double>(cell);
 }
 double
-get_num(cell_t const& v)
+get_num(cell_t const& cell)
 {
-	return holds_int(v) ? get_int(v) : get_double(v);
+	return holds_int(cell) ? get_int(cell) : get_double(cell);
 }
 str_t
-to_string(cell_t const& v)
+to_string(cell_t const& cell)
 {
 	std::ostringstream out;
-	std::visit([&](auto&& arg) { out << arg; }, v);
+	std::visit([&](auto&& arg) { out << arg; }, cell);
 	return out.str();
 }
 } // namespace fd_read_xlsx
